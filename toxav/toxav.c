@@ -656,6 +656,11 @@ void toxav_callback_bit_rate_status(ToxAV *av, toxav_bit_rate_status_cb *functio
 bool toxav_audio_send_frame(ToxAV *av, uint32_t friend_number, const int16_t *pcm, size_t sample_count,
                             uint8_t channels, uint32_t sampling_rate, TOXAV_ERR_SEND_FRAME *error)
 {
+    uint64_t start_time = current_time_monotonic();
+    uint64_t delta = start_time;
+    
+    LOGGER_DEBUG ("Starting time: %llu", start_time);
+    
     TOXAV_ERR_SEND_FRAME rc = TOXAV_ERR_SEND_FRAME_OK;
     ToxAVCall *call;
 
@@ -700,6 +705,9 @@ bool toxav_audio_send_frame(ToxAV *av, uint32_t friend_number, const int16_t *pc
         goto END;
     }
 
+    LOGGER_DEBUG("Initial checking took: %llu", current_time_monotonic() - delta);
+    delta = current_time_monotonic();
+    
     { /* Encode and send */
         if (ac_reconfigure_encoder(call->audio.second, call->audio_bit_rate * 1000, sampling_rate, channels) != 0) {
             pthread_mutex_unlock(call->mutex_audio);
@@ -707,6 +715,9 @@ bool toxav_audio_send_frame(ToxAV *av, uint32_t friend_number, const int16_t *pc
             goto END;
         }
 
+        LOGGER_DEBUG("Encoder configuration took: %llu", current_time_monotonic() - delta);
+        delta = current_time_monotonic();
+        
         uint8_t dest[sample_count + sizeof(sampling_rate)]; /* This is more than enough always */
 
         sampling_rate = htonl(sampling_rate);
@@ -714,6 +725,9 @@ bool toxav_audio_send_frame(ToxAV *av, uint32_t friend_number, const int16_t *pc
         int vrc = opus_encode(call->audio.second->encoder, pcm, sample_count,
                               dest + sizeof(sampling_rate), sizeof(dest) - sizeof(sampling_rate));
 
+        LOGGER_DEBUG("Encoding took: %llu", current_time_monotonic() - delta);
+        delta = current_time_monotonic();
+        
         if (vrc < 0) {
             LOGGER_WARNING("Failed to encode frame %s", opus_strerror(vrc));
             pthread_mutex_unlock(call->mutex_audio);
@@ -725,18 +739,22 @@ bool toxav_audio_send_frame(ToxAV *av, uint32_t friend_number, const int16_t *pc
             LOGGER_WARNING("Failed to send audio packet");
             rc = TOXAV_ERR_SEND_FRAME_RTP_FAILED;
         }
+        
+        LOGGER_DEBUG("Sending took: %llu", current_time_monotonic() - delta);
     }
 
 
     pthread_mutex_unlock(call->mutex_audio);
 
 END:
+    LOGGER_DEBUG ("End time: %llu Total: %llu", current_time_monotonic(), current_time_monotonic() - start_time);
 
     if (error)
         *error = rc;
 
     return rc == TOXAV_ERR_SEND_FRAME_OK;
 }
+
 bool toxav_video_send_frame(ToxAV *av, uint32_t friend_number, uint16_t width, uint16_t height, const uint8_t *y,
                             const uint8_t *u, const uint8_t *v, TOXAV_ERR_SEND_FRAME *error)
 {
