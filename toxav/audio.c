@@ -368,7 +368,7 @@ OpusEncoder *create_audio_encoder (int32_t bit_rate, int32_t sampling_rate, int3
     }
 
     /* Set algorithm to the highest complexity, maximizing compression */
-    status = opus_encoder_ctl(rc, OPUS_SET_COMPLEXITY(10));
+    status = opus_encoder_ctl(rc, OPUS_SET_COMPLEXITY(4));
 
     if (status != OPUS_OK) {
         LOGGER_ERROR("Error while setting encoder ctl: %s", opus_strerror(status));
